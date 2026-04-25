@@ -138,3 +138,48 @@ class SessionSummary(BaseModel):
     last_exit_code: int | None = None
     open_issue: str | None = None
     suggested_next: str | None = None
+
+
+# ── Repo Access ─────────────────────────────────────────────────
+
+
+class RepoInfo(BaseModel):
+    """Available repository metadata."""
+
+    key: str
+    name: str
+    path: str
+    accessible: bool
+
+
+class TreeEntry(BaseModel):
+    """Single entry in a flat directory tree listing."""
+
+    path: str
+    type: Literal["file", "directory"]
+    size_bytes: int | None = None
+    extension: str | None = None
+    is_text: bool | None = None
+    sensitive: bool = False
+
+
+class FileMetaResponse(BaseModel):
+    """File metadata response."""
+
+    path: str
+    size_bytes: int
+    line_count: int | None = None
+    is_text: bool
+    sensitive: bool
+    modified_at: str
+
+
+class FileContentResponse(BaseModel):
+    """File content response with line range."""
+
+    path: str
+    start: int
+    end: int
+    total_lines: int | None = None
+    lines: list[str]
+

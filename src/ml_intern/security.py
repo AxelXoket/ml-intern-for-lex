@@ -108,18 +108,29 @@ _SECRET_PATTERNS: list[re.Pattern[str]] = [
         r'((?:api[_-]?key|token|secret|password|credential)\s*[=:]\s*)(\S+)',
         re.IGNORECASE,
     ),
-    # Anthropic API keys
+    # Anthropic API keys (must be before generic sk- pattern)
     re.compile(r'(sk-ant-[a-zA-Z0-9_-]{20,})'),
     # HuggingFace tokens
     re.compile(r'(hf_[a-zA-Z0-9]{20,})'),
-    # GitHub Personal Access Tokens
-    re.compile(r'(ghp_[a-zA-Z0-9]{36})'),
+    # GitHub Personal Access Tokens (classic)
+    re.compile(r'(ghp_[a-zA-Z0-9]{36,})'),
     # GitHub OAuth tokens
-    re.compile(r'(gho_[a-zA-Z0-9]{36})'),
+    re.compile(r'(gho_[a-zA-Z0-9]{36,})'),
+    # GitHub Fine-Grained Personal Access Tokens (2023+ format)
+    re.compile(r'(github_pat_[0-9a-zA-Z_]{20,})'),
+    # GitHub App tokens (user-to-server, server-to-server, refresh, etc.)
+    re.compile(r'(gh[usrpo]_[a-zA-Z0-9]{36,})'),
     # Google API keys
     re.compile(r'(AIza[0-9A-Za-z_-]{35})'),
-    # OpenAI-style keys
-    re.compile(r'(sk-[a-zA-Z0-9]{20,})'),
+    # OpenAI-style keys (negative lookahead prevents matching Anthropic sk-ant-)
+    re.compile(r'(sk-(?!ant-)[a-zA-Z0-9_-]{20,})'),
+    # AWS Access Key IDs
+    re.compile(r'(AKIA[0-9A-Z]{16})'),
+    # Bearer authorization header values
+    re.compile(
+        r'((?:authorization:\s*bearer\s+))([a-zA-Z0-9\-._~+/]+=*)',
+        re.IGNORECASE,
+    ),
 ]
 
 

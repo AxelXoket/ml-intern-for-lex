@@ -29,7 +29,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Package location: src/ml_intern/config.py
 # Repo root: 3 levels up (config.py → ml_intern → src → repo root)
-_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+INTERN_REPO_ROOT = Path(__file__).resolve().parent.parent.parent
+_REPO_ROOT = INTERN_REPO_ROOT  # backward compat alias
 
 
 def resolve_env_file() -> Path | None:

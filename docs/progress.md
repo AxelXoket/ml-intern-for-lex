@@ -179,3 +179,121 @@ Built the first deterministic comparison engine that enriches Part 2's RealityRe
 - Under-claiming: ambiguous evidence → no finding
 
 ---
+
+## 2026-04-25 (Friday) — 05:30 — Architecture Audit + Charter v2.1
+
+### Architecture Audit v2 ✅
+
+Completed full architectural audit of ml-intern against HF ml-intern reference repository (`hf-ml-intern-reference`). Finalized as `docs/architecture_audit_v2.md` (1260 lines).
+
+**What was done:**
+- 15-domain comparative audit: pipeline model, session management, tool routing, security, config, testing, data flow, CLI, error handling, logging, state, caching, deployment, legal, dependencies
+- Full Adopt / Adapt / Avoid pattern matrix with charter-aligned verdicts
+- Tool approval matrix and dependency surface classification
+- Resolved redaction contradictions (Bearer header tracking confirmed as gap)
+- All supplement sections unified into main document — no structural patches remain
+- Normalized all language to neutral audit tone (no action verbs, no directives)
+
+### Charter v2.1 — Session Types, API Boundary, Self-Write Rules ✅
+
+Updated `docs/PROJECT_CHARTER.md` (652 lines) with audit-derived architectural constraints.
+
+**New sections added to Section 4:**
+- **Session Type Distinction** — Pipeline (stateless) / Dashboard (short memo) / Agentic (forbidden) — prevents future ambiguity about "no session management"
+- **API & Dashboard Boundary** — MAY/MUST NOT lists for API capability boundaries
+- **Output Layer Discipline** — Three-tier output separation: findings (non-recommendatory) / research discussion (options) / implementation (approval-gated)
+
+**Locked decisions added to Section 9:**
+- No agentic sessions, dashboard sessions allowed
+- API boundary = read-only repo access
+- Output discipline = three-tier separation
+- Self-write boundary = ml-intern operational writes (user-triggered only), lex unconditionally read-only
+
+**New rules added to Section 11:**
+- ml-intern operational writes rule (session memos, report cache — user trigger required)
+- Read-Only File Access renamed to "Target Repositories" with lex strict read-only clause
+- ml-intern Operational Writes subsection (designated paths, short-form only, no autonomy)
+
+### Phase 3B Research + Critical Review ✅
+
+Conducted pre-implementation research and self-review for Phase 3B planning.
+
+**Research completed:**
+- API endpoint contract patterns (health, report, file serving)
+- Path traversal prevention and symlink escape defense
+- File reader API with line range support
+- Directory tree endpoint design (GitHub Trees API adaptation)
+- Secret redaction regex patterns (5 gap patches identified)
+- Binary file detection approaches
+
+**Critical review findings:**
+- `/api/report` already exists — needs POST/GET separation with cache
+- `/api/status` vs `/api/health` resolved — keep existing, no rename
+- `schemas.py` confirmed as correct location for new API models
+- Route splitting recommended (HF reference uses `APIRouter` pattern)
+- `_REPO_ROOT` private import identified as code smell — deferred to Part C
+
+**Verification:**
+- 67 tests passing (0.34s)
+- All charter patches verified via automated scripts (23/23, 11/11)
+- Lex repo confirmed clean — no changes needed
+
+---
+
+## 2026-04-25 (Friday) — 06:00 — Phase 3B-1 Implementation
+
+### Part A — Security Patch ✅
+
+Updated `src/ml_intern/security.py` — 5 redaction pattern changes:
+- Added `github_pat_[0-9a-zA-Z_]{20,}` (GitHub Fine-Grained PAT)
+- Added `gh[usrpo]_[a-zA-Z0-9]{36,}` (GitHub App tokens, supports 2026 520-char format)
+- Added `AKIA[0-9A-Z]{16}` (AWS Access Key ID)
+- Added Bearer authorization header redaction (case-insensitive)
+- Fixed OpenAI `sk-` pattern with negative lookahead `(?!ant-)` to avoid matching Anthropic keys
+- Updated `ghp_` and `gho_` patterns from `{36}` to `{36,}` for future-proofing
+
+Created `tests/test_redaction.py` — 24 tests covering all 12 patterns + edge cases.
+
+### Part B — Safe File Access Utility ✅
+
+Created `src/ml_intern/repo_access.py`:
+- `validate_path()` — `resolve()` + `is_relative_to()` (OWASP 2026 standard)
+- `is_sensitive_file()` / `is_text_file()` — delegates to `repo_scanner.py` for consistency
+- `get_file_meta()` — stat, line count, text/binary, sensitive flag, ISO timestamp
+- `read_file_lines()` — generator, 1000-line cap, `utf-8-sig` BOM handling, `redact_secrets()` per line
+
+Renamed `_REPO_ROOT` → `INTERN_REPO_ROOT` in `config.py` (backward compat alias kept).
+
+Created `tests/test_repo_access.py` — 28 tests (path traversal, sensitive, binary, reader, BOM).
+
+### Part C — Route Splitting + New API Endpoints ✅
+
+**Route split:** `main.py` reduced from 363 lines to ~70 lines.
+
+Created `src/ml_intern/routes/` package with 5 modules:
+- `dashboard.py` — `GET /`, `/api/status`, `/api/commands`, `/api/session/summary`
+- `jobs.py` — `POST/GET /api/jobs/*`, SSE streaming, cancel
+- `configs.py` — `GET /api/configs/*` (upgraded path traversal defense)
+- `repos.py` — 4 new endpoints: list repos, tree, file meta, file content
+- `report.py` — POST/GET cache pattern, 7 sub-endpoints (findings, observations, questions, summary, status, dashboard summary)
+
+Added response models to `schemas.py`: `RepoInfo`, `TreeEntry`, `FileMetaResponse`, `FileContentResponse`.
+
+Config route path traversal upgraded from `string.replace("..", "")` to `resolve()` + `is_relative_to()`.
+
+### Part D — Integration Tests ✅
+
+Created `tests/conftest.py` with `TestClient` fixture.
+Created `tests/test_api_repos.py` — 13 tests (list, tree, meta, content, traversal, binary, range).
+Created `tests/test_api_report.py` — 10 tests (POST/GET cache, sub-endpoints, dashboard summary).
+
+Added `httpx` as dev dependency (required by `TestClient`).
+
+### Verification
+
+- **142 tests passing** (0.46s)
+- 0 regressions from existing 67 tests
+- 75 new tests added
+- 10 new source files, 4 modified files
+
+---
