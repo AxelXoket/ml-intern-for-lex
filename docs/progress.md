@@ -82,6 +82,51 @@ Designed the structured output contract for the Context Intake + Repo Reality Re
 - `ProjectPhase` enum replaces free string to prevent typo risk
 - Snapshot awareness is forward-compatible: fields exist but carry no comparison logic in Part 1
 
-**Status:** Part 1 final. Part 2 (read-only document reading + repo scanning logic) not started.
+**Status:** Part 1 final. Part 2 complete.
+
+---
+
+## 2026-04-24 (Thursday) — 18:00 — Part 2: Reality Report Engine
+
+### Part 2: Read-Only Inspect Engine ✅
+
+Built the document intake + repository scanning + report assembly engine that fills the Part 1 schema.
+
+**New files:**
+- `report_schemas.py` — Part 1 output contract transcribed as importable Pydantic v2 code (8 enums, 8 models)
+- `document_intake.py` — reads PROJECT_CHARTER.md and progress.md files, produces DocumentReadResult list with structured summaries
+- `repo_scanner.py` — recursive read-only repository scanner with prune set, binary detection, symlink safety, CLI surface inspection
+- `report_builder.py` — orchestrates intake + scan, assigns stable IDs, generates limited findings, neutral questions, executive summary
+
+**Modified files:**
+- `main.py` — added `GET /api/report` endpoint via `run_in_executor` (sync core, async wrapper)
+
+**New tests (41 total, all passing):**
+- `test_report_schemas.py` — enum values, model instantiation, ID pattern validation, evidence enforcement
+- `test_document_intake.py` — found/missing docs, BOM handling, sequential IDs, missing repo roots
+- `test_repo_scanner.py` — directory tree, prune behavior, text detection, git remote URL, sensitive file protection
+- `test_report_builder.py` — smoke test, partial completeness, JSON serialization, sequential IDs
+
+**Key design decisions:**
+- Sync core functions, async wrapper for FastAPI — filesystem I/O doesn't benefit from async
+- Flat module layout preserved (no subpackages)
+- Hardcoded prune set (parameter-based, swappable for future Git-aware ignore)
+- Extension-based text file allowlist — non-text files counted but never opened
+- Errors become observations (SourceKind.ENVIRONMENT), never silently swallowed
+- UTF-8 with `errors='replace'`, BOM skipping — matches runner.py pattern
+- `.env` files observed for presence/size only, content never read
+- `remote_url` from `.git/config` with explicit None fallback (documented in code comments)
+- False-positive stub finding fixed: only emits when actual stubs exist
+
+**Verification:**
+- 41 tests passing (0.16s)
+- Live report against real repos: 3/3 docs found, 18 observations, 0 false findings
+- JSON serialization verified
+- `GET /api/report` endpoint ready
+
+**Strict boundaries maintained:**
+- Read-only: no file writes, no git mutations, no caches
+- Non-recommendatory: no severity, priority, or action fields
+- Human-in-the-loop: questions are neutral, findings are evidence-backed
 
 ---
