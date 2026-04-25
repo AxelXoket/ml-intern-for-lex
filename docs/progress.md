@@ -130,3 +130,52 @@ Built the document intake + repository scanning + report assembly engine that fi
 - Human-in-the-loop: questions are neutral, findings are evidence-backed
 
 ---
+
+## 2026-04-24 (Thursday) — 23:00 - Part 3: Deterministic Comparison Engine
+
+### Part 3: Charter-Aware Comparison Layer ✅
+
+Built the first deterministic comparison engine that enriches Part 2's RealityReport with charter-derived findings.
+
+**New files:**
+- `comparison_rules.py` - charter-derived constants (CLI command table, baseline file sets), 5 rule functions, CLI observation parser, RuleResult container
+- `comparison_engine.py` - single entry point `apply_comparison_rules()`, ID continuation, deduplication, redaction
+
+**Modified files:**
+- `report_builder.py` - integrated Part 3 at the end of `generate_report()` flow (Layer D: enrich, Layer E: rebuild summary)
+- `repo_scanner.py` - fixed CLI scanner regex: `@app.command()` → `@app.command([^)]*)` to catch all Typer decorator variants; added `_stub()` helper detection
+
+**Part 2 cleanup (before Part 3):**
+- Removed CLI stub finding logic from `_generate_findings()` - now owned by Part 3 Rule 2
+- Removed CLI stub question logic from `_generate_questions()` - now owned by Part 3 Rule 5
+
+**New tests (26 Part 3 + 41 Part 2 = 67 total, all passing):**
+- `test_comparison_engine.py` - preservation, ID continuation, all 5 rules, deduplication, recommendation language prohibition, conservatism, CLI parser
+
+**Rules implemented (first wave):**
+1. `rule.required_documents.baseline` - checks 3 required docs → aligned or structural_inconsistency
+2. `rule.cli_surface.charter_alignment` - compares 12-command surface vs charter → aligned, misalignment, or structural_inconsistency
+3. `rule.structure.expected_layout` - checks baseline files/dirs for both repos → aligned or structural_inconsistency
+4. `rule.implementation.started_but_incomplete` - minimal/no-op at current phase (Phase 1/2 complete)
+5. `rule.questions.open_design_area` - neutral question generation (currently defers to Rule 2's own question logic)
+
+**Key design decisions:**
+- Unidirectional imports: comparison_rules → comparison_engine → report_builder (no circular imports)
+- Executive summary rebuild owned by report_builder.py, not comparison_engine.py
+- Rule 4 intentionally minimal - Phase 1/2 documented as complete
+- Rule 2 merged original Rule 2 (CLI alignment) and Rule 3 (phase-appropriate stubs) into single rule - one finding, not two
+- Phase 3+ stubs treated as EXPECTED, never as incomplete_implementation
+- CLI scanner now correctly detects all 12 commands (was 10 due to missed decorator variants)
+
+**Live report output (real repos):**
+- 3 findings: all aligned (documents present, CLI matches charter, repo layout correct)
+- 0 questions (everything aligned - no open decisions)
+- Executive summary: `{"aligned": 3}`, 18 observations, 3 documents
+
+**Strict boundaries maintained:**
+- No LLM calls, no external APIs, no repository mutation
+- No recommendations, priorities, severity, or urgency language
+- Deterministic predicates only — same input always produces same output
+- Under-claiming: ambiguous evidence → no finding
+
+---

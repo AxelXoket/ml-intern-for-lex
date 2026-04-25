@@ -271,6 +271,15 @@ def _scan_cli_commands(repo_root: Path) -> dict | None:
 
     Returns: list of command names, counts of implemented vs stub commands.
     Returns None if cli.py is missing/unreadable.
+
+    Command name resolution:
+    - If @app.command("explicit-name") is used, that name is the CLI name.
+    - If @app.command(name="explicit") is used, that name is the CLI name.
+    - Otherwise, the Python function name is the CLI name (underscores → hyphens by Typer).
+
+    Stub detection:
+    - Functions that raise NotImplementedError are stubs.
+    - Functions that call _stub() helper are stubs.
     """
     cli_path = repo_root / "src" / "lex_study_foundation" / "cli.py"
     if not cli_path.is_file():
@@ -281,20 +290,43 @@ def _scan_cli_commands(repo_root: Path) -> dict | None:
     except OSError:
         return None
 
-    # Find @app.command() decorated functions
-    commands = re.findall(r'@app\.command\(\)\s*\ndef\s+(\w+)', content)
+    # Find @app.command(...) decorated functions — match any arguments inside parens
+    matches = re.findall(r'@app\.command\(([^)]*)\)\s*\ndef\s+(\w+)', content)
 
-    # Check for NotImplementedError stubs
+    # Resolve CLI-visible command names
+    commands = []
+    for decorator_args, func_name in matches:
+        # Check for explicit name: @app.command("name") or @app.command(name="name")
+        name_match = re.search(r'["\']([^"\']+)["\']', decorator_args)
+        if name_match:
+            commands.append(name_match.group(1))
+        else:
+            # Typer converts underscores to hyphens by default
+            commands.append(func_name.replace("_", "-"))
+
+    # Check for stubs — detect both NotImplementedError and _stub() helper
     stubs = []
     implemented = []
-    for cmd in commands:
-        # Find the function body and check for NotImplementedError
-        pattern = rf'def\s+{cmd}\b.*?(?=\ndef\s|\Z)'
+    for _decorator_args, func_name in matches:
+        # Find the function body and check for stub indicators
+        pattern = rf'def\s+{func_name}\b.*?(?=\ndef\s|\Z)'
         func_match = re.search(pattern, content, re.DOTALL)
-        if func_match and "NotImplementedError" in func_match.group():
-            stubs.append(cmd)
+        if func_match:
+            body = func_match.group()
+            if "NotImplementedError" in body or "_stub(" in body:
+                # Resolve CLI name for the stub list
+                name_match = re.search(r'["\']([^"\']+)["\']', _decorator_args)
+                cli_name = name_match.group(1) if name_match else func_name.replace("_", "-")
+                stubs.append(cli_name)
+            else:
+                name_match = re.search(r'["\']([^"\']+)["\']', _decorator_args)
+                cli_name = name_match.group(1) if name_match else func_name.replace("_", "-")
+                implemented.append(cli_name)
         else:
-            implemented.append(cmd)
+            # Cannot parse body — conservatively mark as implemented
+            name_match = re.search(r'["\']([^"\']+)["\']', _decorator_args)
+            cli_name = name_match.group(1) if name_match else func_name.replace("_", "-")
+            implemented.append(cli_name)
 
     return {
         "total": len(commands),

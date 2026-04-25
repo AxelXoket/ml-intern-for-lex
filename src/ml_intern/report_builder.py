@@ -15,6 +15,7 @@ from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
 
+from ml_intern.comparison_engine import apply_comparison_rules
 from ml_intern.document_intake import read_documents
 from ml_intern.report_schemas import (
     CompletenessStatus,
@@ -89,32 +90,11 @@ def _generate_findings(
     """
     findings: list[Finding] = []
 
-    # ── Finding: CLI command surface state ──
-    for obs in observations:
-        if obs.source_kind == SourceKind.COMMAND_SURFACE:
-            # Only generate finding if there are actual stubs (not "Stubs (0)")
-            if "Stubs (0)" not in obs.description and "Stubs (" in obs.description:
-                findings.append(
-                    Finding(
-                        id="fnd-000",  # Placeholder
-                        category=FindingCategory.INCOMPLETE_IMPLEMENTATION,
-                        description=redact_secrets(
-                            "CLI has stub commands that raise NotImplementedError."
-                        ),
-                        detail=redact_secrets(obs.description),
-                        evidence=[
-                            EvidenceItem(
-                                repo=obs.repo,
-                                path=obs.paths[0] if obs.paths else None,
-                                source_kind=SourceKind.COMMAND_SURFACE,
-                                snippet=obs.description,
-                            ),
-                        ],
-                        evidence_origin=EvidenceOrigin.REPO_BASED,
-                        referenced_observations=[obs.id],
-                        referenced_documents=[],
-                    )
-                )
+    # ── Note: CLI command surface findings are NOT generated here. ──
+    # CLI-vs-charter comparison logic belongs in Part 3's comparison
+    # engine (comparison_rules.py + comparison_engine.py) where it can
+    # be evaluated against charter expectations and phase context.
+    # Part 2 only records the raw CLI observation in observations.
 
     # ── Finding: Missing mandatory documents ──
     missing_docs = [d for d in documents if not d.found]
@@ -176,22 +156,9 @@ def _generate_questions(
             )
         )
 
-    # ── Question: Stub commands and phase status ──
-    stub_findings = [
-        f for f in findings
-        if f.category == FindingCategory.INCOMPLETE_IMPLEMENTATION
-    ]
-    if stub_findings:
-        questions.append(
-            QuestionRaised(
-                id="qst-000",  # Placeholder
-                text=redact_secrets(
-                    "CLI has stub commands awaiting implementation. "
-                    "Which phase is expected to implement each stub command?"
-                ),
-                triggered_by=[f.id for f in stub_findings],
-            )
-        )
+    # ── Note: CLI stub/phase questions are NOT generated here. ──
+    # CLI-vs-charter question generation belongs in Part 3's comparison
+    # engine where phase context is available.
 
     # Limit to 5 questions
     return questions[:5]
@@ -345,7 +312,7 @@ def generate_report(
         repo_names, documents, all_observations, findings, questions, completeness,
     )
 
-    return RealityReport(
+    base_report = RealityReport(
         report_id=report_id,
         timestamp=timestamp,
         schema_version="1.0.0",
@@ -361,3 +328,20 @@ def generate_report(
         questions=questions,
         executive_summary=executive_summary,
     )
+
+    # ── Layer D: Part 3 — Deterministic comparison enrichment ──
+    enriched_report = apply_comparison_rules(base_report)
+
+    # ── Layer E: Rebuild executive summary with enriched data ──
+    enriched_summary = _build_executive_summary(
+        repo_names,
+        enriched_report.documents,
+        enriched_report.observations,
+        enriched_report.findings,
+        enriched_report.questions,
+        completeness,
+    )
+
+    return enriched_report.model_copy(update={
+        "executive_summary": enriched_summary,
+    })
