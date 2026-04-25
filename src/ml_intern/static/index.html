@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="ml-intern — Companion dashboard for lex_study_foundation CLI">
+    <title>ml-intern</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚡</text></svg>">
+</head>
+<body>
+    <div class="app-layout">
+
+        <!-- ═══ Header ═══ -->
+        <header class="header" id="app-header">
+            <div class="header-brand">
+                <h1>ml-intern</h1>
+                <span class="badge">companion</span>
+            </div>
+            <div class="header-status" id="header-status">
+                <span class="status-dot checking" id="status-dot"></span>
+                <span id="status-text">Checking...</span>
+                <span class="research-badge disabled" id="research-badge" title="Research mode status">Research: disabled</span>
+            </div>
+        </header>
+
+        <!-- ═══ Sidebar ═══ -->
+        <aside class="sidebar" id="sidebar">
+
+            <!-- Commands Section -->
+            <div class="sidebar-section">
+                <div class="section-title">Commands</div>
+                <div class="command-list" id="command-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+            <!-- Config Files Section -->
+            <div class="sidebar-section">
+                <div class="section-title">Config Files</div>
+                <div class="config-list" id="config-list">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+
+        </aside>
+
+        <!-- ═══ Main Content ═══ -->
+        <main class="main-content" id="main-content">
+
+            <!-- Config Select (shown when validate-config is selected) -->
+            <div class="config-select-area" id="config-select-area">
+                <label for="config-select">Select config file to validate:</label>
+                <select id="config-select">
+                    <option value="">— select a config file —</option>
+                </select>
+            </div>
+
+            <!-- Output Panel -->
+            <div class="output-panel" id="output-panel">
+                <div class="output-header" id="output-header" style="display: none;">
+                    <div class="output-title">
+                        <span class="cmd-label" id="output-cmd-label">—</span>
+                        <span class="job-status" id="output-job-status"></span>
+                    </div>
+                    <div class="output-controls">
+                        <span class="output-meta" id="output-meta"></span>
+                        <button class="view-btn active" id="btn-view-clean" title="Clean output">Clean</button>
+                        <button class="view-btn" id="btn-view-raw" title="Raw output with ANSI">Raw</button>
+                        <button class="cancel-btn" id="btn-cancel" style="display: none;">Cancel</button>
+                    </div>
+                </div>
+
+                <div class="output-body" id="output-body">
+                    <div class="output-welcome" id="output-welcome">
+                        <div class="welcome-icon">⚡</div>
+                        <p>Select a command to get started</p>
+                        <span class="welcome-hint">Output will stream here in real-time</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Recent Jobs Panel -->
+            <div class="recent-panel" id="recent-panel">
+                <div class="recent-header">
+                    <h3>Recent Jobs</h3>
+                </div>
+                <div class="recent-list" id="recent-list">
+                    <div class="empty-state" id="recent-empty">No jobs yet</div>
+                </div>
+            </div>
+
+        </main>
+
+    </div>
+
+    <!-- ═══ Config Viewer Modal ═══ -->
+    <div class="modal-overlay" id="config-modal-overlay">
+        <div class="modal">
+            <div class="modal-header">
+                <h2 id="config-modal-title">Config File</h2>
+                <button class="modal-close" id="config-modal-close" title="Close">✕</button>
+            </div>
+            <div class="modal-body">
+                <pre id="config-modal-content"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
