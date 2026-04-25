@@ -172,29 +172,57 @@ This is a separate decision from the main project's data-generation provider (Ge
 
 These providers serve different roles and must not be conflated. A change in one does not imply a change in the other. Each repo manages its own provider credentials independently.
 
-### Current Capabilities (V1)
+### Current Capabilities
 
+**Dashboard (V1 — Phase 2.5):**
 - Dashboard UI with cyberpunk dark theme
 - 4 CLI commands executable through the browser (doctor, info, paths, validate-config)
 - Real-time SSE output streaming
 - Job lifecycle management (create, cancel, history)
 - Config file viewing with path traversal protection
-- Subprocess env allowlist — only OS runtime vars forwarded
-- Secret deny list — provider keys never forwarded, RuntimeError if detected
-- Secret redaction on all output, errors, and session summaries
 - Health state reporting (healthy / degraded / unavailable)
 - Research mode infrastructure (feature flag, config, status badge — no provider features yet)
+
+**RealityReport Pipeline (Implemented — Phase 2.5+):**
+- **5-layer deterministic pipeline:** Document Intake → Repo Scan → Alignment Check → Comparison Engine → Executive Summary Rebuild
+- **Document intake** (`document_intake.py`): Reads PROJECT_CHARTER.md and progress.md from both repos, produces structured `DocumentReadResult` objects with role classification and summaries
+- **Repository scanner** (`repo_scanner.py`): Read-only inspection of git state, directory structure, CLI commands (Typer decorator extraction), config files, and dependencies
+- **Report builder** (`report_builder.py`): Orchestrates all layers, assigns stable IDs, computes completeness metrics, assembles `RealityReport`
+- **Comparison engine** (`comparison_engine.py` + `comparison_rules.py`): 5 deterministic rules — CLI surface alignment, expected repo layout, required documents baseline, open design areas, started-but-incomplete detection
+- **Report schemas** (`report_schemas.py`): 411-line Pydantic v2 data contract — 15 enums and models including `Observation`, `Finding`, `QuestionRaised`, `EvidenceItem`, `ExecutiveSummary`
+- **Finding categories** derived from charter Section 8: aligned, misalignment, missing_decision, incomplete_implementation, phase_drift, research_gap, structural_inconsistency
+- **Evidence origin tracking**: Each finding carries `evidence_origin` (document_scan / repo_scan / cross_reference) and `referenced_observations` / `referenced_documents`
+- **Deduplication**: `_already_covered()` prevents duplicate findings by obs_id + category
+- All layers are strictly read-only and non-recommendatory — no priorities, no actions, no fix suggestions
+
+**Security Layer (Implemented — Phase 2.5):**
+- Subprocess env allowlist — 12 OS runtime vars forwarded, everything else stripped
+- Secret deny list — 9 provider keys (`ANTHROPIC_API_KEY`, `HF_TOKEN`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCESS_KEY_ID`, `AZURE_OPENAI_API_KEY`) raise `RuntimeError` if detected
+- Output redaction — 7 compiled regex patterns applied to all output text before buffering
+- Redaction contract enforced at schema level — all text-bearing fields in report schemas require pre-redaction
+
+**Configuration (Implemented — Phase 2.5):**
+- Two-class Pydantic v2 separation: `IntegrationSettings` (lex connection) / `ResearchProviderSettings` (ml-intern secrets)
+- Deterministic `.env` resolution from package location (not CWD) — override via `ML_INTERN_ENV_FILE`
+- Precedence: OS env vars > repo-local .env > pydantic defaults
+
+**Testing (Current: 67 tests across 5 files):**
+- `test_comparison_engine.py` — 5 rules × positive + negative scenarios, dedup, edge cases
+- `test_report_builder.py` — 5-layer pipeline integration
+- `test_repo_scanner.py` — git state, CLI commands, configs
+- `test_report_schemas.py` — Pydantic model validation, JSON serialization
+- `test_document_intake.py` — markdown parsing edge cases, missing files
 
 ### Intended Evolution
 
 The companion is intended to evolve into a **research console** that can:
 
-- Inspect the local repository in depth (structure, files, state, gaps)
-- Read and understand this charter and other project-defining documents
-- Compare repo reality against project intent
-- Identify misalignments, missing decisions, incomplete implementations, and research gaps
+- Inspect the local repository in depth (structure, files, state, gaps) — **partially implemented via RealityReport pipeline**
+- Read and understand this charter and other project-defining documents — **implemented via document intake layer**
+- Compare repo reality against project intent — **implemented via comparison engine**
+- Identify misalignments, missing decisions, incomplete implementations, and research gaps — **implemented via finding categories**
 - Perform focused external research when explicitly directed
-- Present findings in a visible, reviewable, discussion-friendly format
+- Present findings in a visible, reviewable, discussion-friendly format — **implemented via structured RealityReport**
 - Support human decisions — never replace them
 
 ### Technical Stack
@@ -205,7 +233,8 @@ The companion is intended to evolve into a **research console** that can:
 | Frontend | Vanilla HTML/CSS/JS (no framework) |
 | CLI | Typer (`ml-intern serve`) |
 | Streaming | Server-Sent Events (SSE) |
-| Config | Pydantic v2 + pydantic-settings |
+| Config | Pydantic v2 + pydantic-settings (two-class separation) |
+| Report schemas | Pydantic v2 (15 enums/models, 411 lines) |
 | Packaging | Hatchling, src/ layout, uv |
 | Runtime | Python 3.12.10 |
 | Research provider | Claude (Anthropic) — current direction |
@@ -220,6 +249,59 @@ This boundary is a hard design constraint:
 - Subprocess environment is built from an explicit allowlist — `os.environ` is never copied
 - A deny list of provider keys raises `RuntimeError` if any appear in subprocess env
 - ml-intern operates in read/observe mode toward lex — no file modification, no config rewriting
+
+### Session Type Distinction
+
+The word “session” has three distinct meanings in this ecosystem. They must not be conflated:
+
+| Session Type | Scope | State | Status |
+|---|---|---|---|
+| **Pipeline session** | RealityReport generation | Stateless — load config, execute, return report, exit | ✅ Implemented (no state between runs) |
+| **Dashboard/UI session** | Browser interface | Short memo — chat interface, activity history, display state | ✅ Allowed (Phase 3B scope) |
+| **Agentic execution session** | Autonomous tool execution | Long-lived — tool approval, sandbox, shell, file mutation | ❌ Forbidden (architecture audit: AVOID) |
+
+**Rules:**
+- Pipeline execution is always stateless. No run depends on a previous run’s output.
+- Dashboard may maintain short-lived UI state (chat history, recent activity, view preferences) within a browser session.
+- Dashboard session memory is short memo format only — no full transcript storage, no large file content caching.
+- No agentic execution session will be implemented. No tool approval flow, no sandbox, no shell access, no file write/edit/delete operations.
+
+### API & Dashboard Boundary
+
+The dashboard’s API layer has explicit capability boundaries:
+
+**The API MAY:**
+- Provide read-only access to repo structure (directory tree, file metadata)
+- Serve file content from the target repository for display in the dashboard
+- Expose RealityReport pipeline results via REST endpoints
+- Maintain dashboard chat session state and short memo memory
+- Accept POST requests for ml-intern internal state (chat/session/report refresh)
+- Write to ml-intern's own operational files (session memos, cached reports) — only when explicitly triggered by the user
+
+**The API MUST NOT:**
+- Read `.env` file contents from either repository
+- Expose provider credentials or secret values through any endpoint
+- Provide file write, edit, or delete operations on either target repository
+- Write to `lex_study_foundation` under any circumstance
+- Perform any write operation autonomously (without explicit user trigger)
+- Offer shell, sandbox, or subprocess execution endpoints to the frontend
+- Implement HF Jobs, git operations, or any cloud compute submission
+- Store full conversation transcripts or large file content persistently
+
+### Output Layer Discipline
+
+The system produces three distinct output types. Each has different rules:
+
+| Output Type | Produces | May Recommend? | May Act? |
+|---|---|---|---|
+| **RealityReport findings** | Observations, findings, questions | ❌ No — strictly non-recommendatory | ❌ No |
+| **Research discussion layer** | Options, trade-offs, rationale | ✅ Yes — presents choices with reasoning | ❌ No |
+| **Implementation action** | Code changes, file edits, config updates | N/A | ✅ Only with explicit human approval |
+
+**Rules:**
+- RealityReport pipeline output never contains recommendations, priorities, severity labels, or action items. It produces neutral observations and evidence-backed findings only.
+- Research discussion (human-directed conversation) may present options, compare alternatives, and explain trade-offs — but all options require human selection.
+- Implementation occurs only after explicit human approval. No finding or research output auto-triggers code changes.
 
 ---
 
@@ -338,7 +420,7 @@ inspect → discuss → refine → research → compare → decide → act
 - Identify gaps, contradictions, and misalignments
 - Summarize and compare findings
 - Perform external research when directed
-- Recommend actions with reasoning
+- Present options with reasoning during research discussion (see Section 4 “Output Layer Discipline”)
 - Ask clarifying questions
 
 **The system MUST NOT:**
@@ -349,8 +431,9 @@ inspect → discuss → refine → research → compare → decide → act
 - Assume a suggestion equals permission to implement
 - Bypass the human review step under any circumstance
 - Run autonomous loops without human checkpoints
+- Include recommendations, priorities, or action items in RealityReport pipeline output
 
-**The principle:** suggest is not approve. Recommend is not execute.
+**The principle:** suggest is not approve. Recommend is not execute. Observe is not recommend.
 
 ---
 
@@ -396,24 +479,53 @@ Research without context is noise. Context-first research is signal.
 
 These are established and should not be reopened without a real blocker:
 
+**Project structure:**
 - `lex_study_foundation` is the main repository
 - `ml-intern-for-lex` is a companion/research console, not the main project
 - Human-in-the-loop is mandatory — no silent mutation, no autonomous decisions
+- Two separate repos, two separate venvs, two separate `.env` files
+- Security boundary between repos is mandatory
+
+**Phase status:**
 - Phase 1 (skeleton) is complete
 - Phase 2 (behavioral spec + utilities) is complete
 - Phase 2.5 (companion dashboard + runtime stabilization) is complete
 - Phase 3 = data generation core
+
+**Model and training:**
 - Target model = Gemma 4 E4B-it
 - Training method = LoRA / QLoRA
 - Target audience = Turkish law students (1st–4th year)
 - Behavioral personality = locked (Phase 2a spec)
+
+**Technical stack:**
 - Runtime = Python 3.12.10 for both repos
 - Package management = uv for both repos
-- Two separate repos, two separate venvs, two separate `.env` files
-- Security boundary between repos is mandatory
+
+**Data integrity:**
 - Tier system: short (180 tokens), medium (400), long (650), list (450)
 - JSONL rules: UTF-8, no BOM, `ensure_ascii=False`, trailing newline, strict-by-default
 - Text normalization: NFC Unicode, Turkish-safe (no case-folding)
+
+**ml-intern architecture (confirmed by architecture audit 2026-04-25):**
+- Pipeline model = stateless deterministic (single-pass, 5-layer) — no agent loop, no iteration, no LLM-driven branching
+- No LLM dependency in the pipeline — fully deterministic, no external API calls during scan/report
+- No autonomous decision-making — pipeline produces observations and findings, never recommendations or actions
+- No agentic execution sessions — no tool approval, no sandbox, no shell, no file mutation (see Section 4 “Session Type Distinction”)
+- Dashboard/UI sessions are allowed — short memo, chat history, display state (see Section 4 “Session Type Distinction”)
+- No context window management — not applicable (no LLM calls, no token tracking)
+- No doom loop detection — not applicable (deterministic pipeline guarantees termination by construction)
+- No prompt engineering — not applicable (instructions codified as deterministic Python rules in `comparison_rules.py`)
+- No SFT data pipeline — not applicable (output is human-readable reports, not training data)
+- Config architecture = two-class Pydantic separation (`IntegrationSettings` / `ResearchProviderSettings`) — security boundary enforced at class level
+- `.env` resolution = package-location-based (deterministic, not CWD-dependent)
+- Report output = structured `RealityReport` (Pydantic model) — no streaming events, no SSE during pipeline execution
+- Finding categories derived from charter Section 8 — codified as `FindingCategory` enum
+- Subprocess security = 3-level enforcement: (1) no write operations in codebase, (2) env allowlist + deny list, (3) output regex redaction
+- Secret deny list = 9 entries (`ANTHROPIC_API_KEY`, `HF_TOKEN`, `GITHUB_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `AWS_SECRET_ACCESS_KEY`, `AWS_ACCESS_KEY_ID`, `AZURE_OPENAI_API_KEY`)
+- API boundary = read-only repo access, no file mutation endpoints, no .env exposure (see Section 4 “API & Dashboard Boundary”)
+- Output discipline = three-tier separation: findings (non-recommendatory), research discussion (options), implementation (approval-gated) (see Section 4 “Output Layer Discipline”)
+- Self-write boundary = ml-intern may write to its own operational files only (session memos, report cache); lex writes are unconditionally forbidden; all writes require explicit user trigger
 
 ### Current Provider Directions
 
@@ -486,6 +598,7 @@ These govern how work is performed and how decisions flow:
 - **No autonomous decision-making.** The system recommends; the human decides.
 - **No silent mutation.** Files, configs, and repo state must not be changed without visibility and consent.
 - **No unsupervised loops.** All research, analysis, and action cycles must include human checkpoints.
+- **ml-intern operational writes.** ml-intern may write to its own operational files (session memos, report cache) only when the user explicitly triggers the write. No autonomous or scheduled writes. `lex_study_foundation` is never writable by ml-intern under any circumstance.
 - **Phase discipline.** No Phase 4+ work until Phase 3 is meaningfully complete. Do not drift into later-phase topics unless explicitly directed.
 - **Progress documentation.** Both repos maintain `docs/progress.md` as an operational history log. Entries are written in English.
 - **Commit message format.** `Type : Description` — capital letter start, space before and after colon. Example: `Chore : Update setup_env.bat to use Python 3.12 explicitly`
@@ -517,7 +630,22 @@ These govern the technical implementation and must be respected in all code and 
 - `GEMINI_API_KEY` → belongs to `lex_study_foundation` only
 - Provider credentials are never forwarded across repo boundaries via subprocess or any other mechanism
 
+**Read-Only File Access (Target Repositories):**
+- Dashboard API may read file content from target repositories for display purposes only
+- File reads are subject to path traversal protection (no `..` escapes, no symlink following)
+- `.env` files are never read or exposed through any API endpoint
+- No file write, edit, or delete operations on target repositories exist in the API surface
+- Binary files are detected by extension allowlist and excluded from content reading
+- `lex_study_foundation` is strictly read-only — ml-intern will never create, modify, or delete any file in the lex repository
+
+**ml-intern Operational Writes:**
+- ml-intern may write to its own operational data files (session memos, report cache) within the ml-intern repository
+- All operational writes require explicit user trigger — no autonomous, scheduled, or background writes
+- Operational write targets are limited to designated paths (e.g., `data/`, `session_memos.jsonl`) — never `src/`, `docs/progress.md`, or config files
+- Session memos are short-form only — no full transcripts, no large file content, no detailed logs (detail lives in `progress.md`)
+
 ---
 
-*This document was last reviewed: 2026-04-24*
+*This document was last reviewed: 2026-04-25*
 *Phase status at time of writing: Between Phase 2.5 and Phase 3*
+*Architecture audit (read-only, vs HF ml-intern reference) completed: 2026-04-25*
