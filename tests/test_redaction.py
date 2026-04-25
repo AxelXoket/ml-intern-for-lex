@@ -42,7 +42,8 @@ class TestGitHubClassicPAT:
 
 class TestGoogleAPIKey:
     def test_google_key_redacted(self):
-        text = "AIzaSyD-abcdefghijklmnopqrstuvwxyz01234"
+        # Built at runtime to avoid GitHub secret scanning false positive
+        text = "AIza" + "SyD-abcdefghijklmnopqrstuvwxyz01234"
         result = redact_secrets(text)
         assert "AIza" not in result
         assert "[REDACTED]" in result
