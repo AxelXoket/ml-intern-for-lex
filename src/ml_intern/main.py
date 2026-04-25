@@ -323,3 +323,40 @@ async def get_config_file(category: str, name: str):
 async def get_session_summary():
     """Get the current session summary (without writing to file)."""
     return job_manager.generate_session_summary()
+
+
+# ── API: Reality Report ─────────────────────────────────────────
+
+@app.get("/api/report")
+async def get_reality_report():
+    """Generate a Context Intake + Repo Reality Report.
+
+    Scans both repositories (lex_study_foundation and ml-intern-for-lex)
+    in read-only mode and produces a structured RealityReport.
+
+    This endpoint calls the synchronous report builder via run_in_executor
+    to avoid blocking the async event loop during filesystem I/O.
+
+    Returns a complete RealityReport JSON object conforming to the
+    Part 1 output contract schema.
+    """
+    from ml_intern.config import _REPO_ROOT
+    from ml_intern.report_builder import generate_report
+
+    config = get_integration_settings()
+
+    loop = asyncio.get_event_loop()
+    try:
+        report = await loop.run_in_executor(
+            None,
+            generate_report,
+            _REPO_ROOT,
+            config.project_root,
+        )
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Report generation failed: {exc}",
+        )
+
+    return report.model_dump(mode="json")
