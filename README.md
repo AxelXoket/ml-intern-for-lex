@@ -1,10 +1,22 @@
-# ml-intern
+<p align="center">
+  <h1 align="center">ml-intern-for-lex</h1>
+  <p align="center">
+    <strong>Companion dashboard and research sidecar for lex-study-foundation</strong>
+  </p>
+  <p align="center">
+    <img src="https://img.shields.io/badge/python-3.11+-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python">
+    <img src="https://img.shields.io/badge/license-GPL--3.0-blue?style=flat-square" alt="License">
+    <img src="https://img.shields.io/badge/framework-FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI">
+    <img src="https://img.shields.io/badge/localhost-only-brightgreen?style=flat-square" alt="Localhost">
+    <img src="https://img.shields.io/badge/mode-read--only-yellow?style=flat-square" alt="Read-Only">
+  </p>
+</p>
 
-Companion dashboard and research sidecar for [lex_study_foundation](https://github.com/AxelXoket/lex-study-foundation).
+---
 
 ## What is this?
 
-`ml-intern` is a **separate, lightweight web dashboard** that observes and runs selected
+`ml-intern-for-lex` is a **separate, lightweight web dashboard** that observes and runs selected
 `lex_study_foundation` CLI commands through a browser UI. It is NOT the core project —
 it is a companion tool designed to stay decoupled.
 
@@ -21,8 +33,8 @@ it is a companion tool designed to stay decoupled.
 ### Install & Run
 
 ```bash
-git clone <repo-url>
-cd ml-intern
+git clone https://github.com/AxelXoket/ml-intern-for-lex.git
+cd ml-intern-for-lex
 
 # Install dependencies
 uv sync
@@ -99,7 +111,7 @@ Provider tokens are only needed for research-mode features (disabled by default 
 
 ### Why Two Repos?
 
-`ml-intern` and `lex_study_foundation` are **separate repos with separate concerns**:
+`ml-intern-for-lex` and `lex_study_foundation` are **separate repos with separate concerns**:
 
 - Separate git repositories
 - Separate virtual environments
@@ -196,4 +208,4 @@ ml-intern (FastAPI)  ─── subprocess ──▶  lex_study_foundation (Typer
 
 ## License
 
-MIT
+This project is licensed under the GNU General Public License v3.0 — see the [LICENSE](LICENSE) file for details.
